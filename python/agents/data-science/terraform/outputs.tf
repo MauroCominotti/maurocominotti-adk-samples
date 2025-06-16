@@ -14,6 +14,6 @@ output "adk_agent_cli_info" {
 }
 
 output "adk_web_ui_url" {
-  description = "URL to access the ADK Web UI (if the agent is run with 'adk web' and port 8080 is mapped)."
-  value       = "http://${google_compute_instance.adk_ds_docker_vm.network_interface[0].access_config[0].nat_ip}:8080"
+  description = "URL to access the ADK Web UI (if the agent is run with 'adk web' and port 8000 is mapped)."
+  value       = "http://${google_compute_instance.adk_ds_docker_vm.network_interface[0].access_config[0].nat_ip}:8000"
 }

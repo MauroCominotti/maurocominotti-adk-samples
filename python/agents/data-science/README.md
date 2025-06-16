@@ -73,7 +73,7 @@ This is the quickest way to get the agent and its dependencies running locally, 
     ```
     *   The `--build` flag will build the image using `Dockerfile.local`.
     *   During the build, if `IS_FIRST_DEPLOYMENT` is set to `true` (default in `docker-compose.yml` args), the setup scripts for BigQuery and RAG will run automatically.
-    *   The application will then start, and the ADK Web UI will be accessible at `http://localhost:8080`.
+    *   The application will then start, and the ADK Web UI will be accessible at `http://localhost:8000`.
     *   For subsequent runs where resources are already deployed, you can set `IS_FIRST_DEPLOYMENT: "false"` in the `args` section of `docker-compose.yml` or by exporting `IS_FIRST_DEPLOYMENT=false` in your shell before running `docker compose up --build app` to skip the setup steps during build.
 
 ### Manual Project Setup with Poetry
@@ -300,15 +300,18 @@ For deploying the agent to a production-like environment on Google Cloud, it's r
 
 1.  **Provision Infrastructure with Terraform:**
     *   Write Terraform configuration files (`.tf`) to define all necessary GCP resources. If you have a `terraform/` directory with these files, navigate into it.
+    **Navigate to your Terraform directory:**
+        ```bash
+        cd terraform/  # Or your Terraform configurations directory
+        ```
     *   **Resources to Provision:**
         *   BigQuery Dataset (e.g., `forecasting_sticker_sales`).
         *   Vertex AI Search Datastore for the RAG Corpus (for BQML agent).
         *   IAM Service Account for the agent with appropriate roles (e.g., BigQuery Data Editor, AI Platform User, Discovery Engine Viewer).
-        *   Your chosen compute service (e.g., Cloud Run, Google Kubernetes Engine (GKE), Compute Engine VM).
+        *   Compute Engine VM service.
         *   Artifact Registry repository to store your Docker images.
     *   **Terraform Commands:**
         ```bash
-        # cd /path/to/your/terraform/configurations
         terraform init  # Initializes your Terraform working directory
         terraform plan  # Shows what Terraform will create/change
         terraform apply # Applies the changes to create the infrastructure

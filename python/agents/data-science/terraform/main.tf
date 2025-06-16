@@ -72,7 +72,7 @@ resource "google_compute_instance" "adk_ds_docker_vm" {
     # Pass environment variables to the Docker container.
     # These will be used by entrypoint.sh to create/update the .env file inside the container.
     docker run -d --restart=always \
-      -p 8080:8080 \
+      -p 8000:8000 \
       -e GOOGLE_GENAI_USE_VERTEXAI="${var.google_genai_use_vertexai}" \
       -e GOOGLE_API_KEY="${var.google_api_key}" \
       -e GOOGLE_CLOUD_PROJECT="${var.google_cloud_project}" \
