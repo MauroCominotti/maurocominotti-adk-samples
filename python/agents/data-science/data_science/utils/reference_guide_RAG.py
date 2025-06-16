@@ -41,26 +41,43 @@ vertexai.init(project=PROJECT_ID, location="us-central1")
 
 
 def create_RAG_corpus():
-    # Create RagCorpus
-    # Configure embedding model, for example "text-embedding-005".
-    embedding_model_config = rag.RagEmbeddingModelConfig(
-        vertex_prediction_endpoint=rag.VertexPredictionEndpoint(
-            publisher_model="publishers/google/models/text-embedding-005"
+    """
+    Creates a RAG corpus if it doesn't already exist with the specified display_name.
+    If it exists, it uses the existing one.
+    """
+    print(f"Checking for existing RAG corpus with display name: {display_name}")
+    corpora = rag.list_corpora()
+    existing_corpus = None
+    for corpus in corpora:
+        if corpus.display_name == display_name:
+            existing_corpus = corpus
+            break
+
+    if existing_corpus:
+        print(f"Found existing RAG corpus: {existing_corpus.name}")
+        corpus_resource_name = existing_corpus.name
+    else:
+        print(f"RAG corpus '{display_name}' not found. Creating a new one...")
+        # Configure embedding model, for example "text-embedding-005".
+        embedding_model_config = rag.RagEmbeddingModelConfig(
+            vertex_prediction_endpoint=rag.VertexPredictionEndpoint(
+                publisher_model="publishers/google/models/text-embedding-005"
+            )
         )
-    )
 
-    backend_config = rag.RagVectorDbConfig(
-        rag_embedding_model_config=embedding_model_config
-    )
+        backend_config = rag.RagVectorDbConfig(
+            rag_embedding_model_config=embedding_model_config
+        )
 
-    bqml_corpus = rag.create_corpus(
-        display_name=display_name,
-        backend_config=backend_config,
-    )
+        new_corpus = rag.create_corpus(
+            display_name=display_name,
+            backend_config=backend_config,
+        )
+        print(f"Successfully created RAG corpus: {new_corpus.name}")
+        corpus_resource_name = new_corpus.name
 
-    write_to_env(bqml_corpus.name)
-
-    return bqml_corpus.name
+    write_to_env(corpus_resource_name)
+    return corpus_resource_name
 
 
 def ingest_files(corpus_name):
@@ -126,14 +143,15 @@ def write_to_env(corpus_name):
 
 
 if __name__ == "__main__":
-    # rag_corpus = rag.list_corpora()
+    # Check if corpus_name is already in .env, if not, create/get it.
+    # This handles the case where the script might be run multiple times.
+    # The create_RAG_corpus function is idempotent based on display_name.
+    current_corpus_name = os.getenv("BQML_RAG_CORPUS_NAME")
+    if not current_corpus_name:
+        print("BQML_RAG_CORPUS_NAME not found in .env, attempting to create or find existing corpus.")
 
-    corpus_name = os.getenv("BQML_RAG_CORPUS_NAME")
-
-    print("Creating the corpus.")
-    corpus_name = create_RAG_corpus()
-    print(f"Corpus name: {corpus_name}")
-
-    print(f"Importing files to corpus: {corpus_name}")
-    ingest_files(corpus_name)
-    print(f"Files imported to corpus: {corpus_name}")
+    final_corpus_name = create_RAG_corpus() # This will either create or find existing
+    print(f"Ensured RAG corpus is available: {final_corpus_name}")
+    print(f"Importing files to corpus: {final_corpus_name}...")
+    ingest_files(final_corpus_name)
+    print(f"Files imported to corpus: {final_corpus_name}.")

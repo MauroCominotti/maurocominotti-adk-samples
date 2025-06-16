@@ -27,4 +27,4 @@ RUN poetry install --no-root --no-dev
 COPY . .
 
 EXPOSE 8000
-CMD ["poetry", "run", "adk", "web"]
+CMD ["poetry", "run", "adk", "web", "--host", "0.0.0.0", "--port", "8000"]
