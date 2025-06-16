@@ -1,0 +1,38 @@
+# MANDATORY: Replace with your GCP Project ID for deploying Terraform-managed resources
+gcp_project_id = "your-gcp-project-id-for-terraform"
+
+# MANDATORY: Full Docker image name (e.g., from Google Artifact Registry or Docker Hub)
+# Example: "us-central1-docker.pkg.dev/your-gcp-project-id/your-repo/adk-ds-agent:latest"
+# Ensure this image is built and pushed before running Terraform.
+docker_image_name = "your-docker-image-name"
+
+# MANDATORY: Replace with your GCP Project ID for Vertex AI services
+google_cloud_project = "your-gcp-project-id-for-vertex-ai"
+
+# MANDATORY: Replace with your GCP Project ID for BigQuery
+bq_project_id = "your-gcp-project-id-for-bigquery"
+
+# --- Optional: Review and change defaults if needed ---
+# gcp_region              = "us-central1"
+# instance_name           = "adk-ds-docker-vm"
+# machine_type            = "e2-medium" # Ensure this has enough memory
+# disk_size_gb            = 50
+# google_cloud_location   = "us-central1" # For Vertex AI services
+# bq_dataset_id           = "forecasting_sticker_sales"
+# bq_dataset_location     = "US"
+
+# --- ML Dev Backend (Only if GOOGLE_GENAI_USE_VERTEXAI=0) ---
+# google_api_key = "YOUR_ML_DEV_API_KEY_IF_NOT_USING_VERTEXAI"
+
+# --- Agent Configuration ---
+# google_genai_use_vertexai = 1 # 1 for Vertex AI, 0 for ML Dev
+# nl2sql_method             = "BASELINE" # Or "CHASE"
+# code_interpreter_extension_name = "" # e.g., "projects/your-gcp-project-id/locations/us-central1/extensions/your-extension-id"
+
+# --- Model Names (Defaults are gemini-1.5-flash-001, adjust if needed) ---
+# root_agent_model        = "gemini-1.5-flash-001"
+# analytics_agent_model   = "gemini-1.5-flash-001"
+# bigquery_agent_model    = "gemini-1.5-flash-001"
+# baseline_nl2sql_model   = "gemini-1.5-flash-001"
+# chase_nl2sql_model      = "gemini-1.5-flash-001"
+# bqml_agent_model        = "gemini-1.5-flash-001"

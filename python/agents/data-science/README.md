@@ -41,11 +41,42 @@ The key features of the Data Science Multi-Agent include:
 *   **Python 3.12+:** Ensure you have Python 3.12 or a later version installed.
 *   **Poetry:** Install Poetry by following the instructions on the official Poetry website: [https://python-poetry.org/docs/](https://python-poetry.org/docs/)
 *   **Git:** Ensure you have git installed. If not, you can download it from [https://git-scm.com/](https://git-scm.com/) and follow the [installation guide](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git).
+*   **Docker and Docker Compose:** (Recommended for local development) Install Docker Desktop or Docker Engine and Docker Compose. [https://docs.docker.com/get-docker/](https://docs.docker.com/get-docker/)
 
+### Project Setup with Docker (Recommended for Local Development)
 
+This is the quickest way to get the agent and its dependencies running locally, including automated setup of BigQuery tables and the RAG corpus.
 
-### Project Setup with Poetry
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/google/adk-samples.git
+    cd adk-samples/python/agents/data-science
+    ```
 
+2.  **Set up Environment Variables:**
+    *   Copy the example environment file:
+        ```bash
+        cp .env.example .env
+        ```
+    *   Edit the `.env` file and fill in your GCP project details (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `BQ_PROJECT_ID`, `BQ_DATASET_ID`). Other variables like model names have defaults but can be customized. `BQML_RAG_CORPUS_NAME` and `CODE_INTERPRETER_EXTENSION_NAME` can be left empty initially if you want the setup scripts to create them.
+
+3.  **Ensure GCP Application Default Credentials (ADC) are set up:**
+    If you haven't already, log in with gcloud:
+    ```bash
+    gcloud auth application-default login
+    ```
+    The `docker-compose.yml` is configured to use your local ADC file (typically `~/.config/gcloud/application_default_credentials.json`) as a secret during the image build for setup scripts.
+
+4.  **Build and Run with Docker Compose:**
+    ```bash
+    docker compose up --build app
+    ```
+    *   The `--build` flag will build the image using `Dockerfile.local`.
+    *   During the build, if `IS_FIRST_DEPLOYMENT` is set to `true` (default in `docker-compose.yml` args), the setup scripts for BigQuery and RAG will run automatically.
+    *   The application will then start, and the ADK Web UI will be accessible at `http://localhost:8080`.
+    *   For subsequent runs where resources are already deployed, you can set `IS_FIRST_DEPLOYMENT: "false"` in the `args` section of `docker-compose.yml` or by exporting `IS_FIRST_DEPLOYMENT=false` in your shell before running `docker compose up --build app` to skip the setup steps during build.
+
+### Manual Project Setup with Poetry
 1.  **Clone the Repository:**
 
     ```bash
@@ -261,6 +292,49 @@ Tests assess the overall executability of the agents.
 - This command executes all test files within the `tests/` directory.
 - `poetry run` ensures that pytest runs within the project's virtual environment.
 
+## Production Environment with Terraform
+
+For deploying the agent to a production-like environment on Google Cloud, it's recommended to use Infrastructure as Code (IaC) tools like Terraform to manage your cloud resources, and the official `Dockerfile` to package your application. The `Dockerfile.local` used for local development (which runs setup scripts) is not suitable for production images.
+
+**Conceptual Workflow:**
+
+1.  **Provision Infrastructure with Terraform:**
+    *   Write Terraform configuration files (`.tf`) to define all necessary GCP resources. If you have a `terraform/` directory with these files, navigate into it.
+    *   **Resources to Provision:**
+        *   BigQuery Dataset (e.g., `forecasting_sticker_sales`).
+        *   Vertex AI Search Datastore for the RAG Corpus (for BQML agent).
+        *   IAM Service Account for the agent with appropriate roles (e.g., BigQuery Data Editor, AI Platform User, Discovery Engine Viewer).
+        *   Your chosen compute service (e.g., Cloud Run, Google Kubernetes Engine (GKE), Compute Engine VM).
+        *   Artifact Registry repository to store your Docker images.
+    *   **Terraform Commands:**
+        ```bash
+        # cd /path/to/your/terraform/configurations
+        terraform init  # Initializes your Terraform working directory
+        terraform plan  # Shows what Terraform will create/change
+        terraform apply # Applies the changes to create the infrastructure
+        ```
+
+2.  **Build and Push Production Docker Image:**
+    *   Navigate to the agent's directory: `cd adk-samples/python/agents/data-science`
+    *   Use the official `Dockerfile` (this does **not** run setup scripts, as resources are managed by Terraform):
+        ```bash
+        docker build -t YOUR_REGION-docker.pkg.dev/YOUR_GCP_PROJECT/YOUR_ARTIFACT_REPO/YOUR_IMAGE_NAME:YOUR_TAG -f Dockerfile .
+        # Example:
+        # docker build -t us-central1-docker.pkg.dev/my-gcp-project/my-agent-repo/data-science-agent:v1.0 -f Dockerfile .
+        ```
+    *   Authenticate Docker to your Google Cloud Artifact Registry:
+        ```bash
+        gcloud auth configure-docker YOUR_REGION-docker.pkg.dev
+        ```
+    *   Push the image:
+        ```bash
+        docker push YOUR_REGION-docker.pkg.dev/YOUR_GCP_PROJECT/YOUR_ARTIFACT_REPO/YOUR_IMAGE_NAME:YOUR_TAG
+        ```
+
+3.  **Deploy the Agent to GCP:**
+    *   Deploy the Docker image (from Artifact Registry) to the compute service provisioned by Terraform (e.g., using `gcloud run deploy`, `kubectl apply`, or by updating a VM instance template).
+    *   Configure necessary runtime environment variables (similar to your `.env` file, e.g., `BQ_PROJECT_ID`, `BQ_DATASET_ID`, `BQML_RAG_CORPUS_NAME`, model names) in your chosen deployment method (e.g., Cloud Run service definition, Kubernetes manifest).
+    *   The agent will use the IAM Service Account (configured via Terraform, e.g., through Workload Identity on Cloud Run) for GCP permissions at runtime.
 
 
 ## Deployment on Vertex AI Agent Engine

@@ -1,0 +1,125 @@
+# syntax=docker/dockerfile:1.4
+# This Dockerfile is for local development and includes build-time setup capabilities.
+
+# --- BUILDER STAGE ---
+# Used to install dependencies, run setup scripts, and prepare the application
+FROM python:3.12-slim AS builder
+
+# Install system dependencies, Poetry, and Google Cloud SDK
+ENV PYTHONUNBUFFERED 1
+ENV POETRY_VERSION=1.8.2
+ENV POETRY_HOME="/opt/poetry"
+ENV POETRY_VENV_CREATE=false
+ENV PATH="$POETRY_HOME/bin:/root/google-cloud-sdk/bin:$PATH"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --disable-prompts
+
+# Build arguments for setup scripts
+ARG IS_FIRST_DEPLOYMENT="False"
+ARG GOOGLE_CLOUD_PROJECT
+ARG GOOGLE_CLOUD_LOCATION
+ARG BQ_PROJECT_ID
+ARG BQ_DATASET_ID
+ARG BQML_RAG_CORPUS_NAME
+ARG GOOGLE_GENAI_USE_VERTEXAI
+ARG NL2SQL_METHOD
+ARG CODE_INTERPRETER_EXTENSION_NAME
+ARG ROOT_AGENT_MODEL
+ARG ANALYTICS_AGENT_MODEL
+ARG BIGQUERY_AGENT_MODEL
+ARG BASELINE_NL2SQL_MODEL
+ARG CHASE_NL2SQL_MODEL
+ARG BQML_AGENT_MODEL
+
+# Environment variables for the build process (accessible by setup scripts)
+ENV IS_FIRST_DEPLOYMENT=$IS_FIRST_DEPLOYMENT
+ENV GOOGLE_CLOUD_PROJECT=$GOOGLE_CLOUD_PROJECT
+ENV GOOGLE_CLOUD_LOCATION=$GOOGLE_CLOUD_LOCATION
+ENV BQ_PROJECT_ID=$BQ_PROJECT_ID
+ENV BQ_DATASET_ID=$BQ_DATASET_ID
+ENV BQML_RAG_CORPUS_NAME=$BQML_RAG_CORPUS_NAME
+ENV GOOGLE_GENAI_USE_VERTEXAI=$GOOGLE_GENAI_USE_VERTEXAI
+ENV NL2SQL_METHOD=$NL2SQL_METHOD
+ENV CODE_INTERPRETER_EXTENSION_NAME=$CODE_INTERPRETER_EXTENSION_NAME
+ENV ROOT_AGENT_MODEL=$ROOT_AGENT_MODEL
+ENV ANALYTICS_AGENT_MODEL=$ANALYTICS_AGENT_MODEL
+ENV BIGQUERY_AGENT_MODEL=$BIGQUERY_AGENT_MODEL
+ENV BASELINE_NL2SQL_MODEL=$BASELINE_NL2SQL_MODEL
+ENV CHASE_NL2SQL_MODEL=$CHASE_NL2SQL_MODEL
+ENV BQML_AGENT_MODEL=$BQML_AGENT_MODEL
+
+WORKDIR /app/python/agents/data-science
+
+COPY pyproject.toml ./
+
+RUN poetry install --no-root
+
+COPY . .
+
+# Conditional setup execution using BuildKit secrets
+# The `required=false` for the secret mount allows the build to proceed if the secret isn't provided,
+# relying on ambient credentials if available (e.g., in a CI environment).
+RUN --mount=type=secret,id=gcp_credentials,target=/tmp/gcp_adc.json,required=false \
+    if [ "$IS_FIRST_DEPLOYMENT" = "True" ]; then \
+        echo "--- Running first deployment setup (IS_FIRST_DEPLOYMENT=True) ---"; \
+        if [ -f /tmp/gcp_adc.json ]; then \
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_adc.json; \
+            echo "Using /tmp/gcp_adc.json for GCP authentication during setup."; \
+        else \
+            echo "WARNING: GCP credentials secret /tmp/gcp_adc.json not found. Setup scripts might fail or attempt to use ambient ADC if available in the build environment." >&2; \
+        fi; \
+        \
+        echo "Running create_bq_table.py..."; \
+        poetry run python data_science/utils/create_bq_table.py || { echo "create_bq_table.py failed!" >&2; exit 1; }; \
+        \
+        echo "Running reference_guide_RAG.py..."; \
+        poetry run python data_science/utils/reference_guide_RAG.py || { echo "reference_guide_RAG.py failed!" >&2; exit 1; }; \
+        \
+        echo "--- First deployment setup finished ---"; \
+    else \
+        echo "--- IS_FIRST_DEPLOYMENT is False, skipping first deployment setup. ---"; \
+    fi
+
+# --- FINAL STAGE ---
+# This stage builds the final, clean image for the application.
+# It mirrors the structure of your official Dockerfile.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED 1
+ENV POETRY_VERSION=1.8.2
+ENV POETRY_HOME="/opt/poetry"
+ENV POETRY_VENV_CREATE=false
+ENV PATH="$POETRY_HOME/bin:/root/google-cloud-sdk/bin:$PATH"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN curl -sSL https://sdk.cloud.google.com | bash -s -- --disable-prompts
+
+WORKDIR /app/python/agents/data-science
+
+# Copy dependency definition files from the builder stage
+COPY --from=builder /app/python/agents/data-science/pyproject.toml ./
+
+# Install project dependencies (excluding dev dependencies) for a lean final image
+RUN poetry install --no-root --no-dev
+
+# Copy the application code, utilities, tests, and other necessary files from the builder stage
+COPY --from=builder /app/python/agents/data-science/data_science ./data_science
+COPY --from=builder /app/python/agents/data-science/tests ./tests
+COPY --from=builder /app/python/agents/data-science/eval ./eval
+COPY --from=builder /app/python/agents/data-science/.env ./.env
+
+EXPOSE 8000
+CMD ["poetry", "run", "adk", "web"]

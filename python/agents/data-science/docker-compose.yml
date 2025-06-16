@@ -1,0 +1,46 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+      secrets:
+        - gcp_credentials
+      args:
+        # For Dockerfile.local: Controls if setup scripts run during build
+        # Set to "True" for the first run or when BQ/RAG needs re-initialization.
+        # Ensure corresponding .env variables are available for the scripts.
+        IS_FIRST_DEPLOYMENT: ${IS_FIRST_DEPLOYMENT:-True}
+        GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT}
+        GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION}
+        BQ_PROJECT_ID: ${BQ_PROJECT_ID}
+        BQ_DATASET_ID: ${BQ_DATASET_ID}
+        BQML_RAG_CORPUS_NAME: ${BQML_RAG_CORPUS_NAME:-}
+        GOOGLE_GENAI_USE_VERTEXAI: ${GOOGLE_GENAI_USE_VERTEXAI:-1}
+        NL2SQL_METHOD: ${NL2SQL_METHOD:-BASELINE}
+        CODE_INTERPRETER_EXTENSION_NAME: ${CODE_INTERPRETER_EXTENSION_NAME:-}
+        ROOT_AGENT_MODEL: ${ROOT_AGENT_MODEL:-gemini-1.5-flash-001}
+        ANALYTICS_AGENT_MODEL: ${ANALYTICS_AGENT_MODEL:-gemini-1.5-flash-001}
+        BIGQUERY_AGENT_MODEL: ${BIGQUERY_AGENT_MODEL:-gemini-1.5-flash-001}
+        BASELINE_NL2SQL_MODEL: ${BASELINE_NL2SQL_MODEL:-gemini-1.5-flash-001}
+        CHASE_NL2SQL_MODEL: ${CHASE_NL2SQL_MODEL:-gemini-1.5-flash-001}
+        BQML_AGENT_MODEL: ${BQML_AGENT_MODEL:-gemini-1.5-flash-001}
+    container_name: adk_ds_multiagent_app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Mount your local code into the container for live updates during development (optional)
+      # This means changes in your local ./data_science directory will be reflected in the container.
+      - ./data_science:/app/python/agents/data-science/data_science
+      - ./tests:/app/python/agents/data-science/tests
+      - ./eval:/app/python/agents/data-science/eval
+      # Mount gcloud config for Application Default Credentials (ADC)
+      # Replace ~/.config/gcloud with your actual gcloud config path if different
+      - ~/.config/gcloud/:/root/.config/gcloud:ro
+
+secrets:
+  gcp_credentials:
+    # Path to your Google Application Default Credentials JSON file on the HOST machine.
+    # Replace with your actual gcloud config path if different. e.g., ~/.config/gcloud/application_default_credentials.json
+    file: ${HOME}/.config/gcloud/application_default_credentials.json
